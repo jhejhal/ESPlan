@@ -20,7 +20,6 @@
 #include <ETH.h>
 #include <WebServer.h>
 #include <ModbusMaster.h>
-#include <ArduinoModbus.h>
 
 // RS485 serial pins on ESPlan
 #define RS485_RX 36
@@ -44,7 +43,11 @@ WebServer server(80);
 
 // Modbus TCP server
 WiFiServer mbServer(502);
-ModbusTCPServer modbusTCPServer;
+#define MAX_CLIENTS 4
+WiFiClient mbClients[MAX_CLIENTS];
+
+#define MODBUS_REG_COUNT 100
+uint16_t holdingRegs[MODBUS_REG_COUNT];
 
 // Modbus RTU master
 ModbusMaster modbus;
@@ -125,7 +128,7 @@ void handleConfig()
             maps[i].slave = server.arg(sArg).toInt();
             maps[i].reg   = server.arg(rArg).toInt();
             maps[i].tcp   = server.arg(tArg).toInt();
-            if (maps[i].tcp < 100)
+            if (maps[i].tcp < MODBUS_REG_COUNT)
             {
                 mapCount = i + 1;
             }
@@ -149,9 +152,91 @@ void pollRS485()
         if (result == modbus.ku8MBSuccess)
         {
             maps[i].value = modbus.getResponseBuffer(0);
-            modbusTCPServer.holdingRegisterWrite(maps[i].tcp, maps[i].value);
+            if (maps[i].tcp < MODBUS_REG_COUNT) {
+                holdingRegs[maps[i].tcp] = maps[i].value;
+            }
         }
     }
+}
+
+void handleMBTCP(WiFiClient &client)
+{
+    if (client.available() < 7)
+        return;
+
+    uint8_t header[7];
+    client.readBytes(header, 7);
+    uint16_t transId = (header[0] << 8) | header[1];
+    uint16_t length = (header[4] << 8) | header[5];
+    uint8_t unitId = header[6];
+
+    while (client.available() < length)
+        ;
+
+    uint8_t pdu[256];
+    if (length > sizeof(pdu))
+    {
+        client.flush();
+        return;
+    }
+    client.readBytes(pdu, length);
+
+    uint8_t functionCode = pdu[0];
+    uint8_t response[260];
+    uint16_t respLen = 0;
+
+    if (functionCode == 3 && length >= 5)
+    {
+        uint16_t startAddr = (pdu[1] << 8) | pdu[2];
+        uint16_t quantity = (pdu[3] << 8) | pdu[4];
+        if (startAddr + quantity <= MODBUS_REG_COUNT && quantity <= 125)
+        {
+            response[0] = transId >> 8;
+            response[1] = transId & 0xFF;
+            response[2] = 0;
+            response[3] = 0;
+            response[4] = 0;
+            response[5] = quantity * 2 + 3;
+            response[6] = unitId;
+            response[7] = functionCode;
+            response[8] = quantity * 2;
+            respLen = 9;
+            for (int i = 0; i < quantity; i++)
+            {
+                uint16_t val = holdingRegs[startAddr + i];
+                response[respLen++] = val >> 8;
+                response[respLen++] = val & 0xFF;
+            }
+        }
+        else
+        {
+            response[0] = transId >> 8;
+            response[1] = transId & 0xFF;
+            response[2] = 0;
+            response[3] = 0;
+            response[4] = 0;
+            response[5] = 3;
+            response[6] = unitId;
+            response[7] = functionCode | 0x80;
+            response[8] = 0x02;
+            respLen = 9;
+        }
+    }
+    else
+    {
+        response[0] = transId >> 8;
+        response[1] = transId & 0xFF;
+        response[2] = 0;
+        response[3] = 0;
+        response[4] = 0;
+        response[5] = 3;
+        response[6] = unitId;
+        response[7] = functionCode | 0x80;
+        response[8] = 0x01;
+        respLen = 9;
+    }
+
+    client.write(response, respLen);
 }
 
 void setup()
@@ -169,8 +254,6 @@ void setup()
     ETH.begin(ETH_PHY_LAN8720, ETH_ADDR, ETH_MDC_PIN, ETH_MDIO_PIN, ETH_POWER_PIN, ETH_CLOCK_GPIO17_OUT);
 
     mbServer.begin();
-    modbusTCPServer.begin();
-    modbusTCPServer.configureHoldingRegisters(0, 100);
 
     Serial1.begin(baudrate, SERIAL_8N1, RS485_RX, RS485_TX);
 
@@ -183,12 +266,32 @@ void loop()
 {
     if (eth_connected)
     {
-        WiFiClient client = mbServer.available();
-        if (client)
+        if (mbServer.hasClient())
         {
-            modbusTCPServer.accept(client);
+            WiFiClient newClient = mbServer.available();
+            for (int i = 0; i < MAX_CLIENTS; i++)
+            {
+                if (!mbClients[i] || !mbClients[i].connected())
+                {
+                    if (mbClients[i]) mbClients[i].stop();
+                    mbClients[i] = newClient;
+                    break;
+                }
+            }
+            if (newClient && newClient.connected())
+            {
+                newClient.stop();
+            }
         }
-        modbusTCPServer.poll();
+
+        for (int i = 0; i < MAX_CLIENTS; i++)
+        {
+            if (mbClients[i] && mbClients[i].connected() && mbClients[i].available())
+            {
+                handleMBTCP(mbClients[i]);
+            }
+        }
+
         server.handleClient();
     }
     pollRS485();
