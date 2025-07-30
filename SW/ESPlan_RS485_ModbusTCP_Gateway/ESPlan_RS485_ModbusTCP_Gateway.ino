@@ -16,6 +16,7 @@
  */
 
 #include <Arduino.h>
+#include <WiFi.h>
 #include <ETH.h>
 #include <WebServer.h>
 #include <ModbusMaster.h>
@@ -164,7 +165,8 @@ void setup()
 
     WiFi.onEvent(WiFiEvent);
     ETH.config(local_IP, gateway, subnet, dns, dns);
-    ETH.begin(ETH_ADDR, ETH_POWER_PIN, ETH_MDC_PIN, ETH_MDIO_PIN, ETH_PHY_LAN8720, ETH_CLOCK_GPIO17_OUT);
+    // start Ethernet with LAN8720 PHY
+    ETH.begin(ETH_PHY_LAN8720, ETH_ADDR, ETH_MDC_PIN, ETH_MDIO_PIN, ETH_POWER_PIN, ETH_CLOCK_GPIO17_OUT);
 
     mbServer.begin();
     modbusTCPServer.begin();
