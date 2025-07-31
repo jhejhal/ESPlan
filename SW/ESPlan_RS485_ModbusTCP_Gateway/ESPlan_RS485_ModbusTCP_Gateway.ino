@@ -98,6 +98,10 @@ uint32_t baudrate = 9600;
 
 SemaphoreHandle_t mbMutex;
 
+// disconnect TCP clients after two minutes of inactivity
+#define TCP_IDLE_TIMEOUT_MS 120000UL
+#define TCP_IDLE_TICKS (TCP_IDLE_TIMEOUT_MS / 500)
+
 void startMbServer(){
     mb = ModbusIP();
     mb.server(tcpPort);
@@ -281,6 +285,19 @@ uint8_t getClientCount(){
     return count;
 }
 
+void closeIdleConnections(){
+    struct tcp_pcb* pcb = tcp_active_pcbs;
+    while(pcb){
+        if(pcb->local_port == tcpPort && pcb->state == ESTABLISHED){
+            if(pcb->polltmr > TCP_IDLE_TICKS){
+                DEBUG_PRINTLN("Closing idle Modbus TCP client");
+                tcp_abort(pcb);
+            }
+        }
+        pcb = pcb->next;
+    }
+}
+
 void handleClients(){
     uint8_t count = 0;
     String list = "";
@@ -355,6 +372,7 @@ void webTask(void *param)
                 xSemaphoreGive(mbMutex);
             }
             server.handleClient();
+            closeIdleConnections();
             ArduinoOTA.handle();
         }
         vTaskDelay(10 / portTICK_PERIOD_MS);
