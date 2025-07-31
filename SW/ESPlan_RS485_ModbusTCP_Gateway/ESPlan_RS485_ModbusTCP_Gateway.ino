@@ -21,6 +21,9 @@
 #include <WebServer.h>
 #include <ArduinoOTA.h>
 #include <ModbusMaster.h>
+#include "index.h"
+#include "script.h"
+#include "styles.h"
 
 // RS485 serial pins on ESPlan
 #define RS485_RX 36
@@ -92,43 +95,24 @@ void WiFiEvent(WiFiEvent_t event)
 
 void handleRoot()
 {
-    String page =
-        "<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width, initial-scale=1'>"
-        "<title>RS485 Modbus Gateway</title>"
-        "<style>body{font-family:Helvetica;background:#2e2e2e;color:#fff;text-align:center;}"
-        "table{margin:auto;border-collapse:collapse;}td,th{padding:4px;}"
-        "input,button{background:#505050;color:#fff;border:1px solid #ccc;border-radius:4px;}"
-        "button{padding:4px 8px;}</style>"
-        "<script>function addRow(){var t=document.getElementById('map');"
-        "var r=t.insertRow(-1);var i=t.rows.length-2;"
-        "r.innerHTML='<td><input name=\'s'+i+'\' type=number min=1 value=1></td>'+"
-        "'<td><input name=\'r'+i+'\' type=number min=0 value=0></td>'+"
-        "'<td><input name=\'t'+i+'\' type=number min=0 value=0></td>'+"
-        "'<td><button type=button onclick=\'delRow(this)\'>-</button></td>';"
-        "document.getElementById('count').value=i+1;}"
-        "function delRow(b){var r=b.parentNode.parentNode;r.parentNode.removeChild(r);"
-        "var t=document.getElementById('map');document.getElementById('count').value=t.rows.length-2;}"
-        "</script></head><body>";
-    page += "<h2>RS485 Modbus Gateway</h2>";
-    page += "<form method='POST' action='/config'>";
-    page += "IP <input name='ip' value='" + ETH.localIP().toString() + "'><br>";
-    page += "Baud <input name='baud' value='" + String(baudrate) + "'><br>";
-    page += "<table id='map'><tr><th>Slave</th><th>Reg</th><th>TCP</th><th></th></tr>";
-    for (int i = 0; i < mapCount; i++)
-    {
-        page += "<tr><td><input name='s" + String(i) + "' type='number' value='" + String(maps[i].slave) + "'></td>";
-        page += "<td><input name='r" + String(i) + "' type='number' value='" + String(maps[i].reg) + "'></td>";
-        page += "<td><input name='t" + String(i) + "' type='number' value='" + String(maps[i].tcp) + "'></td>";
-        page += "<td><button type='button' onclick='delRow(this)'>-</button></td></tr>";
-    }
-    page += "</table>";
-    page += "<input type='hidden' id='count' name='count' value='" + String(mapCount) + "'>";
-    page += "<button type='button' onclick='addRow()'>+</button><br>";
-    page += "<input type='submit' value='Save'></form></body></html>";
-    server.send(200, "text/html", page);
+    server.send_P(200, "text/html", index_html);
 }
 
-void handleConfig()
+void handleConfigGet()
+{
+    String json = "{\"ip\":\"" + ETH.localIP().toString() + "\",\"baud\":" + String(baudrate) + ",\"items\":";
+    json += "[";
+    for (uint8_t i = 0; i < mapCount; i++)
+    {
+        json += "{\"s\":" + String(maps[i].slave) + ",\"r\":" + String(maps[i].reg) + ",\"t\":" + String(maps[i].tcp) + "}";
+        if (i < mapCount - 1)
+            json += ",";
+    }
+    json += "]}";
+    server.send(200, "application/json", json);
+}
+
+void handleConfigPost()
 {
     if (server.hasArg("baud"))
     {
@@ -298,8 +282,11 @@ void setup()
 
     Serial1.begin(baudrate, SERIAL_8N1, RS485_RX, RS485_TX);
 
-    server.on("/", handleRoot);
-    server.on("/config", HTTP_POST, handleConfig);
+    server.on("/", HTTP_GET, handleRoot);
+    server.on("/script.js", HTTP_GET, [](){ server.send_P(200, "application/javascript", script_js); });
+    server.on("/styles.css", HTTP_GET, [](){ server.send_P(200, "text/css", styles_css); });
+    server.on("/config", HTTP_GET, handleConfigGet);
+    server.on("/config", HTTP_POST, handleConfigPost);
     server.begin();
 }
 
