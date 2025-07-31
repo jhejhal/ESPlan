@@ -31,6 +31,22 @@
 #include "script.h"
 #include "styles.h"
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/semphr.h"
+
+// Debugging macros (set to 0 to disable all debug output)
+#define DEBUG_ENABLED 1
+#if DEBUG_ENABLED
+#define DEBUG_PRINT(x)    Serial.print(x)
+#define DEBUG_PRINTLN(x)  Serial.println(x)
+#define DEBUG_PRINTF(...) Serial.printf(__VA_ARGS__)
+#else
+#define DEBUG_PRINT(x)
+#define DEBUG_PRINTLN(x)
+#define DEBUG_PRINTF(...)
+#endif
+
 // Simple passwords stored in flash memory
 const char* CONFIG_PASSWORD = "admin";     // password required to save config
 const char* OTA_PASSWORD    = "otapass";   // password for OTA updates
@@ -80,9 +96,12 @@ MapItem maps[MAX_ITEMS];
 uint8_t mapCount = 0;
 uint32_t baudrate = 9600;
 
+SemaphoreHandle_t mbMutex;
+
 void startMbServer(){
     mb = ModbusIP();
     mb.server(tcpPort);
+    DEBUG_PRINTF("Starting Modbus TCP server on port %u\n", tcpPort);
     for(uint16_t i=0;i<MODBUS_REG_COUNT;i++){
         mb.addHreg(i);
         mb.Hreg(i, holdingRegs[i]);
@@ -96,18 +115,21 @@ void WiFiEvent(WiFiEvent_t event)
     {
     case ARDUINO_EVENT_ETH_START:
         ETH.setHostname("esplan");
+        DEBUG_PRINTLN("ETH start");
         break;
     case ARDUINO_EVENT_ETH_CONNECTED:
+        DEBUG_PRINTLN("ETH connected");
         break;
     case ARDUINO_EVENT_ETH_GOT_IP:
         eth_connected = true;
-        Serial.print("ETH IP: ");
-        Serial.println(ETH.localIP());
+        DEBUG_PRINT("ETH IP: ");
+        DEBUG_PRINTLN(ETH.localIP());
         startMbServer();
         break;
     case ARDUINO_EVENT_ETH_DISCONNECTED:
     case ARDUINO_EVENT_ETH_STOP:
         eth_connected = false;
+        DEBUG_PRINTLN("ETH disconnected");
         break;
     default:
         break;
@@ -139,6 +161,7 @@ void handleConfigPost()
         server.send(401, "text/plain", "Wrong password");
         return;
     }
+    DEBUG_PRINTLN("Saving configuration");
     if (server.hasArg("baud"))
     {
         baudrate = server.arg("baud").toInt();
@@ -294,11 +317,47 @@ void pollRS485()
             for(uint16_t j=0;j<maps[i].len;j++){
                 uint16_t v = modbus.getResponseBuffer(j);
                 if (maps[i].tcp + j < MODBUS_REG_COUNT) {
-                    holdingRegs[maps[i].tcp + j] = v;
-                    mb.Hreg(maps[i].tcp + j, v);
+                    if(xSemaphoreTake(mbMutex, portMAX_DELAY) == pdTRUE){
+                        holdingRegs[maps[i].tcp + j] = v;
+                        mb.Hreg(maps[i].tcp + j, v);
+                        xSemaphoreGive(mbMutex);
+                    }
                 }
             }
+            DEBUG_PRINTF("Slave %u reg %u len %u updated\n", maps[i].slave, maps[i].reg, maps[i].len);
+        } else {
+            DEBUG_PRINTF("Modbus read error %u on slave %u\n", result, maps[i].slave);
         }
+    }
+}
+
+
+void modbusTask(void *param)
+{
+    DEBUG_PRINTLN("Modbus task started");
+    for(;;)
+    {
+        pollRS485();
+        vTaskDelay(10 / portTICK_PERIOD_MS);
+    }
+}
+
+void webTask(void *param)
+{
+    DEBUG_PRINTLN("Web task started");
+    for(;;)
+    {
+        if (eth_connected)
+        {
+            if(xSemaphoreTake(mbMutex, 10) == pdTRUE)
+            {
+                mb.task();
+                xSemaphoreGive(mbMutex);
+            }
+            server.handleClient();
+            ArduinoOTA.handle();
+        }
+        vTaskDelay(10 / portTICK_PERIOD_MS);
     }
 }
 
@@ -306,6 +365,7 @@ void pollRS485()
 void setup()
 {
     Serial.begin(115200);
+    mbMutex = xSemaphoreCreateMutex();
 
     prefs.begin("cfg", false);
     baudrate = prefs.getUInt("baud", baudrate);
@@ -359,15 +419,11 @@ void setup()
     server.on("/value", HTTP_GET, handleValue);
     server.on("/clients", HTTP_GET, handleClients);
     server.begin();
+    xTaskCreatePinnedToCore(modbusTask, "modbus", 4096, NULL, 1, NULL, 0);
+    xTaskCreatePinnedToCore(webTask, "web", 4096, NULL, 1, NULL, 1);
 }
 
 void loop()
 {
-    if (eth_connected)
-    {
-        mb.task();
-        server.handleClient();
-        ArduinoOTA.handle();
-    }
-    pollRS485();
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
 }
