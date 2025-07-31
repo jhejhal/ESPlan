@@ -1,6 +1,7 @@
 #ifndef SCRIPT_H
 #define SCRIPT_H
 const char script_js[] PROGMEM = R"rawliteral(
+var clientIPs=[];
 function addRow(item){
   var t=document.getElementById('map');
   var r=t.insertRow(-1);
@@ -76,13 +77,22 @@ function saveCfg(e){
   fetch('/config',{method:'POST',body:data}).then(()=>location.reload());
 }
 function updateClients(){
-  fetch('/clients').then(r=>r.text()).then(t=>{
-    document.getElementById('clients').textContent=t;
+  fetch('/clients').then(r=>r.json()).then(data=>{
+    document.getElementById('clients').textContent=data.count;
+    clientIPs=data.ips;
   });
+}
+function showClients(){
+  if(clientIPs.length==0){
+    alert('No clients');
+  }else{
+    alert(clientIPs.join('\n'));
+  }
 }
 document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('add').addEventListener('click',()=>addRow());
   document.getElementById('cfgForm').addEventListener('submit',saveCfg);
+  document.getElementById('showClients').addEventListener('click',showClients);
   loadCfg();
   updateClients();
   setInterval(updateClients,1000);
