@@ -18,6 +18,9 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <ETH.h>
+#include <lwip/tcp.h>
+#include <lwip/ip_addr.h>
+#include <lwip/priv/tcp_priv.h>
 #include <WebServer.h>
 #include <ArduinoOTA.h>
 #include <ModbusMaster.h>
@@ -235,8 +238,6 @@ void handleValue()
     server.send(404, "text/plain", "");
 }
 
-#include <lwip/tcp.h>
-
 uint8_t getClientCount(){
     uint8_t count = 0;
     struct tcp_pcb* pcb = tcp_active_pcbs;
@@ -250,7 +251,23 @@ uint8_t getClientCount(){
 }
 
 void handleClients(){
-    server.send(200, "text/plain", String(getClientCount()));
+    uint8_t count = 0;
+    String list = "";
+    struct tcp_pcb* pcb = tcp_active_pcbs;
+    while(pcb){
+        if(pcb->local_port == tcpPort && pcb->state == ESTABLISHED){
+            char buf[16];
+            ipaddr_ntoa_r(&pcb->remote_ip, buf, sizeof(buf));
+            IPAddress ip;
+            ip.fromString(buf);
+            if(count>0) list += ",";
+            list += "\"" + ip.toString() + "\"";
+            count++;
+        }
+        pcb = pcb->next;
+    }
+    String json = "{\"count\":" + String(count) + ",\"ips\":[" + list + "]}";
+    server.send(200, "application/json", json);
 }
 
 void pollRS485()
