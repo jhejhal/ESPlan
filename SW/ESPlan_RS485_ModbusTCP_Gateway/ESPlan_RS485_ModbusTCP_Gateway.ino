@@ -74,6 +74,7 @@ uint8_t mapCount = 0;
 uint32_t baudrate = 9600;
 
 void startMbServer(){
+    mb = ModbusIP();
     mb.server(tcpPort);
     for(uint16_t i=0;i<MODBUS_REG_COUNT;i++){
         mb.addHreg(i);
@@ -113,7 +114,7 @@ void handleRoot()
 
 void handleConfigGet()
 {
-    String json = "{\"ip\":\"" + ETH.localIP().toString() + "\",\"baud\":" + String(baudrate) + ",\"port\":" + String(tcpPort) + ",\"items\":";
+    String json = "{\"ip\":\"" + ETH.localIP().toString() + "\",\"gw\":\"" + gateway.toString() + "\",\"mask\":\"" + subnet.toString() + "\",\"baud\":" + String(baudrate) + ",\"port\":" + String(tcpPort) + ",\"items\":";
     json += "[";
     for (uint8_t i = 0; i < mapCount; i++)
     {
@@ -144,8 +145,16 @@ void handleConfigPost()
     if (server.hasArg("ip"))
     {
         local_IP.fromString(server.arg("ip"));
-        ETH.config(local_IP, gateway, subnet, dns, dns);
     }
+    if (server.hasArg("gw"))
+    {
+        gateway.fromString(server.arg("gw"));
+    }
+    if (server.hasArg("mask"))
+    {
+        subnet.fromString(server.arg("mask"));
+    }
+    ETH.config(local_IP, gateway, subnet, dns, dns);
 
     uint8_t count = 0;
     if (server.hasArg("count"))
@@ -188,6 +197,14 @@ void handleConfigPost()
     prefs.putUChar("ip1", local_IP[1]);
     prefs.putUChar("ip2", local_IP[2]);
     prefs.putUChar("ip3", local_IP[3]);
+    prefs.putUChar("gw0", gateway[0]);
+    prefs.putUChar("gw1", gateway[1]);
+    prefs.putUChar("gw2", gateway[2]);
+    prefs.putUChar("gw3", gateway[3]);
+    prefs.putUChar("ms0", subnet[0]);
+    prefs.putUChar("ms1", subnet[1]);
+    prefs.putUChar("ms2", subnet[2]);
+    prefs.putUChar("ms3", subnet[3]);
     prefs.putUChar("count", mapCount);
     for(uint8_t i=0;i<mapCount;i++){
         char key[6];
@@ -205,11 +222,15 @@ void handleValue()
     if (server.hasArg("t"))
     {
         uint16_t t = server.arg("t").toInt();
-        if (t < MODBUS_REG_COUNT)
+        uint16_t n = 1;
+        if (server.hasArg("n")) n = server.arg("n").toInt();
+        String out = "";
+        for (uint16_t i = 0; i < n && t + i < MODBUS_REG_COUNT; i++)
         {
-            server.send(200, "text/plain", String(mb.Hreg(t)));
-            return;
+            out += String(t + i) + ": " + String(mb.Hreg(t + i)) + "\n";
         }
+        server.send(200, "text/plain", out);
+        return;
     }
     server.send(404, "text/plain", "");
 }
@@ -250,6 +271,14 @@ void setup()
     local_IP[1] = prefs.getUChar("ip1", local_IP[1]);
     local_IP[2] = prefs.getUChar("ip2", local_IP[2]);
     local_IP[3] = prefs.getUChar("ip3", local_IP[3]);
+    gateway[0] = prefs.getUChar("gw0", gateway[0]);
+    gateway[1] = prefs.getUChar("gw1", gateway[1]);
+    gateway[2] = prefs.getUChar("gw2", gateway[2]);
+    gateway[3] = prefs.getUChar("gw3", gateway[3]);
+    subnet[0]  = prefs.getUChar("ms0", subnet[0]);
+    subnet[1]  = prefs.getUChar("ms1", subnet[1]);
+    subnet[2]  = prefs.getUChar("ms2", subnet[2]);
+    subnet[3]  = prefs.getUChar("ms3", subnet[3]);
     mapCount = prefs.getUChar("count", 0);
     for(uint8_t i=0;i<mapCount && i<MAX_ITEMS;i++){
         char key[6];

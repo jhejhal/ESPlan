@@ -8,8 +8,12 @@ function addRow(item){
              "<td><input class='r' type='number' min='0' value='"+(item?item.r:0)+"'></td>"+
              "<td><input class='n' type='number' min='1' value='"+(item?item.n:1)+"'></td>"+
              "<td><input class='t' type='number' min='0' value='"+(item?item.t:0)+"'></td>"+
+             "<td class='end'></td>"+
              "<td><button type='button' onclick='delRow(this)'>-</button></td>"+
              "<td><button type='button' onclick='showVal(this)'>Show</button></td>";
+  updateEnd(r);
+  r.querySelector('.n').addEventListener('input',()=>updateEnd(r));
+  r.querySelector('.t').addEventListener('input',()=>updateEnd(r));
 }
 function delRow(btn){
   var r=btn.parentNode.parentNode;
@@ -17,12 +21,20 @@ function delRow(btn){
 }
 function showVal(btn){
   var r=btn.parentNode.parentNode;
-  var tcp=r.querySelector('.t').value;
-  fetch('/value?t='+tcp).then(res=>res.text()).then(v=>alert('Value: '+v));
+  var tcp=parseInt(r.querySelector('.t').value);
+  var len=parseInt(r.querySelector('.n').value);
+  fetch('/value?t='+tcp+'&n='+len).then(res=>res.text()).then(v=>alert(v));
+}
+function updateEnd(row){
+  var tcp=parseInt(row.querySelector('.t').value)||0;
+  var len=parseInt(row.querySelector('.n').value)||1;
+  row.querySelector('.end').textContent=tcp+len-1;
 }
 function loadCfg(){
   fetch('/config').then(r=>r.json()).then(cfg=>{
     document.getElementById('ip').value=cfg.ip;
+    document.getElementById('gw').value=cfg.gw;
+    document.getElementById('mask').value=cfg.mask;
     document.getElementById('baud').value=cfg.baud;
     document.getElementById('port').value=cfg.port;
     cfg.items.forEach(addRow);
@@ -34,6 +46,8 @@ function saveCfg(e){
   var rows=t.querySelectorAll('tr');
   var data=new URLSearchParams();
   data.append('ip',document.getElementById('ip').value);
+  data.append('gw',document.getElementById('gw').value);
+  data.append('mask',document.getElementById('mask').value);
   data.append('baud',document.getElementById('baud').value);
   data.append('port',document.getElementById('port').value);
   data.append('count',rows.length-1);
@@ -43,6 +57,21 @@ function saveCfg(e){
     data.append('r'+(i-1),r.querySelector('.r').value);
     data.append('n'+(i-1),r.querySelector('.n').value);
     data.append('t'+(i-1),r.querySelector('.t').value);
+  }
+  var ranges=[];
+  for(var i=1;i<rows.length;i++){
+    var r=rows[i];
+    var s=parseInt(r.querySelector('.t').value)||0;
+    var l=parseInt(r.querySelector('.n').value)||1;
+    ranges.push({s:s,e:s+l-1});
+  }
+  for(var i=0;i<ranges.length;i++){
+    for(var j=i+1;j<ranges.length;j++){
+      if(ranges[i].s<=ranges[j].e && ranges[j].s<=ranges[i].e){
+        alert('Overlapping TCP ranges');
+        return;
+      }
+    }
   }
   fetch('/config',{method:'POST',body:data}).then(()=>location.reload());
 }
