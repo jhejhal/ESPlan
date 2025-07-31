@@ -9,7 +9,7 @@ function addRow(item){
              "<td><input class='n' type='number' min='1' value='"+(item?item.n:1)+"'></td>"+
              "<td><input class='t' type='number' min='0' value='"+(item?item.t:0)+"'></td>"+
              "<td class='end'></td>"+
-             "<td><button type='button' onclick='delRow(this)'>-</button></td>"+
+             "<td><button type='button' onclick='delRow(this)' class='icon'><span class='material-icons'>delete</span></button></td>"+
              "<td><button type='button' onclick='showVal(this)'>Show</button></td>";
   updateEnd(r);
   r.querySelector('.n').addEventListener('input',()=>updateEnd(r));
@@ -75,10 +75,17 @@ function saveCfg(e){
   }
   fetch('/config',{method:'POST',body:data}).then(()=>location.reload());
 }
+function updateClients(){
+  fetch('/clients').then(r=>r.text()).then(t=>{
+    document.getElementById('clients').textContent=t;
+  });
+}
 document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('add').addEventListener('click',()=>addRow());
   document.getElementById('cfgForm').addEventListener('submit',saveCfg);
   loadCfg();
+  updateClients();
+  setInterval(updateClients,1000);
 });
 )rawliteral";
 #endif

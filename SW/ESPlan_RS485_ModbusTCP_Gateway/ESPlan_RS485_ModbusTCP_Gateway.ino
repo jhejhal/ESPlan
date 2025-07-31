@@ -235,6 +235,24 @@ void handleValue()
     server.send(404, "text/plain", "");
 }
 
+#include <lwip/tcp.h>
+
+uint8_t getClientCount(){
+    uint8_t count = 0;
+    struct tcp_pcb* pcb = tcp_active_pcbs;
+    while(pcb){
+        if(pcb->local_port == tcpPort && pcb->state == ESTABLISHED){
+            count++;
+        }
+        pcb = pcb->next;
+    }
+    return count;
+}
+
+void handleClients(){
+    server.send(200, "text/plain", String(getClientCount()));
+}
+
 void pollRS485()
 {
     static uint32_t last = 0;
@@ -313,6 +331,7 @@ void setup()
     server.on("/config", HTTP_GET, handleConfigGet);
     server.on("/config", HTTP_POST, handleConfigPost);
     server.on("/value", HTTP_GET, handleValue);
+    server.on("/clients", HTTP_GET, handleClients);
     server.begin();
 }
 
