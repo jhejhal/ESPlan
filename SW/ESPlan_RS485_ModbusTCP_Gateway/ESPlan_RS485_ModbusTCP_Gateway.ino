@@ -39,9 +39,9 @@
 #define ETH_NRST_PIN 5
 
 // network defaults
-IPAddress local_IP(192, 168, 0, 98);
-IPAddress gateway(192, 168, 0, 1);
-IPAddress subnet(255, 255, 255, 0);
+IPAddress local_IP(10, 10, 70, 114);
+IPAddress gateway(10, 10, 101, 1);
+IPAddress subnet(255, 255, 0, 0);
 IPAddress dns(8, 8, 8, 8);
 
 // web server for configuration
@@ -227,9 +227,9 @@ void setup()
     digitalWrite(ETH_NRST_PIN, HIGH);
 
     WiFi.onEvent(WiFiEvent);
-    ETH.config(local_IP, gateway, subnet, dns, dns);
     // start Ethernet with LAN8720 PHY
     ETH.begin(ETH_PHY_LAN8720, ETH_ADDR, ETH_MDC_PIN, ETH_MDIO_PIN, ETH_POWER_PIN, ETH_CLOCK_GPIO17_OUT);
+    ETH.config(local_IP, gateway, subnet, dns, dns);
 
     ArduinoOTA.setHostname("esplan");
     ArduinoOTA.begin();
@@ -255,4 +255,3 @@ void loop()
     }
     pollRS485();
 }
-
