@@ -29,6 +29,7 @@ const char index_html[] PROGMEM = R"rawliteral(
             </div>
         </div>
         <input type='submit' id='save' value='Save'>
+        <button type='button' id='restart'>Restart</button>
     </form>
     <script src='/script.js'></script>
 </body>

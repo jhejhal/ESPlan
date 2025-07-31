@@ -98,6 +98,10 @@ uint32_t baudrate = 9600;
 
 SemaphoreHandle_t mbMutex;
 
+// disconnect TCP clients after two minutes of inactivity
+#define TCP_IDLE_TIMEOUT_MS 120000UL
+#define TCP_IDLE_TICKS (TCP_IDLE_TIMEOUT_MS / 500)
+
 void startMbServer(){
     mb = ModbusIP();
     mb.server(tcpPort);
@@ -247,8 +251,10 @@ void handleConfigPost()
         sprintf(key,"n%u",i); prefs.putUShort(key,maps[i].len);
         sprintf(key,"t%u",i); prefs.putUShort(key,maps[i].tcp);
     }
-    server.sendHeader("Location", "/");
-    server.send(303);
+    prefs.end();
+    server.send(200, "text/plain", "Restarting");
+    delay(100);
+    ESP.restart();
 }
 
 void handleValue()
@@ -281,6 +287,20 @@ uint8_t getClientCount(){
     return count;
 }
 
+void closeIdleConnections(){
+    struct tcp_pcb* pcb = tcp_active_pcbs;
+    while(pcb){
+        struct tcp_pcb* next = pcb->next;
+        if(pcb->local_port == tcpPort && pcb->state == ESTABLISHED){
+            if(pcb->polltmr > TCP_IDLE_TICKS){
+                DEBUG_PRINTLN("Closing idle Modbus TCP client");
+                tcp_abort(pcb);
+            }
+        }
+        pcb = next;
+    }
+}
+
 void handleClients(){
     uint8_t count = 0;
     String list = "";
@@ -299,6 +319,12 @@ void handleClients(){
     }
     String json = "{\"count\":" + String(count) + ",\"ips\":[" + list + "]}";
     server.send(200, "application/json", json);
+}
+
+void handleRestart(){
+    server.send(200, "text/plain", "Restarting");
+    delay(100);
+    ESP.restart();
 }
 
 void pollRS485()
@@ -355,6 +381,7 @@ void webTask(void *param)
                 xSemaphoreGive(mbMutex);
             }
             server.handleClient();
+            closeIdleConnections();
             ArduinoOTA.handle();
         }
         vTaskDelay(10 / portTICK_PERIOD_MS);
@@ -418,6 +445,7 @@ void setup()
     server.on("/config", HTTP_POST, handleConfigPost);
     server.on("/value", HTTP_GET, handleValue);
     server.on("/clients", HTTP_GET, handleClients);
+    server.on("/restart", HTTP_POST, handleRestart);
     server.begin();
     xTaskCreatePinnedToCore(modbusTask, "modbus", 4096, NULL, 1, NULL, 0);
     xTaskCreatePinnedToCore(webTask, "web", 4096, NULL, 1, NULL, 1);

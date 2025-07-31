@@ -98,10 +98,16 @@ function showClients(){
     alert(clientIPs.join('\n'));
   }
 }
+function restartDevice(){
+  if(confirm('Restart device?')){
+    fetch('/restart',{method:'POST'});
+  }
+}
 document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('add').addEventListener('click',()=>addRow());
   document.getElementById('cfgForm').addEventListener('submit',saveCfg);
   document.getElementById('showClients').addEventListener('click',showClients);
+  document.getElementById('restart').addEventListener('click',restartDevice);
   loadCfg();
   updateClients();
   setInterval(updateClients,1000);
