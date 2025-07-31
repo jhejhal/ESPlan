@@ -6,6 +6,7 @@ function addRow(item){
   var r=t.insertRow(-1);
   r.innerHTML="<td><input class='s' type='number' min='1' value='"+(item?item.s:1)+"'></td>"+
              "<td><input class='r' type='number' min='0' value='"+(item?item.r:0)+"'></td>"+
+             "<td><input class='n' type='number' min='1' value='"+(item?item.n:1)+"'></td>"+
              "<td><input class='t' type='number' min='0' value='"+(item?item.t:0)+"'></td>"+
              "<td><button type='button' onclick='delRow(this)'>-</button></td>"+
              "<td><button type='button' onclick='showVal(this)'>Show</button></td>";
@@ -40,6 +41,7 @@ function saveCfg(e){
     var r=rows[i];
     data.append('s'+(i-1),r.querySelector('.s').value);
     data.append('r'+(i-1),r.querySelector('.r').value);
+    data.append('n'+(i-1),r.querySelector('.n').value);
     data.append('t'+(i-1),r.querySelector('.t').value);
   }
   fetch('/config',{method:'POST',body:data}).then(()=>location.reload());

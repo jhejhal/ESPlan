@@ -15,7 +15,7 @@ const char index_html[] PROGMEM = R"rawliteral(
         Baud <input id='baud' name='baud'><br>
         Port <input id='port' name='port'><br>
         <table id='map'>
-            <tr><th>Slave</th><th>Reg</th><th>TCP</th><th></th><th></th></tr>
+            <tr><th>Slave</th><th>Reg</th><th>Len</th><th>TCP</th><th></th><th></th></tr>
         </table>
         <button type='button' id='add'>+</button><br>
         <input type='submit' id='save' value='Save'>
