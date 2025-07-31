@@ -7,11 +7,17 @@ function addRow(item){
   r.innerHTML="<td><input class='s' type='number' min='1' value='"+(item?item.s:1)+"'></td>"+
              "<td><input class='r' type='number' min='0' value='"+(item?item.r:0)+"'></td>"+
              "<td><input class='t' type='number' min='0' value='"+(item?item.t:0)+"'></td>"+
-             "<td><button type='button' onclick='delRow(this)'>-</button></td>";
+             "<td><button type='button' onclick='delRow(this)'>-</button></td>"+
+             "<td><button type='button' onclick='showVal(this)'>Show</button></td>";
 }
 function delRow(btn){
   var r=btn.parentNode.parentNode;
   r.parentNode.removeChild(r);
+}
+function showVal(btn){
+  var r=btn.parentNode.parentNode;
+  var tcp=r.querySelector('.t').value;
+  fetch('/value?t='+tcp).then(res=>res.text()).then(v=>alert('Value: '+v));
 }
 function loadCfg(){
   fetch('/config').then(r=>r.json()).then(cfg=>{

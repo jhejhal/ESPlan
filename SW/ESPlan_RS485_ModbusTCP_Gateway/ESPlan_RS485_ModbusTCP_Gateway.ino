@@ -161,6 +161,20 @@ void handleConfigPost()
     server.send(303);
 }
 
+void handleValue()
+{
+    if (server.hasArg("t"))
+    {
+        uint16_t t = server.arg("t").toInt();
+        if (t < MODBUS_REG_COUNT)
+        {
+            server.send(200, "text/plain", String(holdingRegs[t]));
+            return;
+        }
+    }
+    server.send(404, "text/plain", "");
+}
+
 void pollRS485()
 {
     static uint32_t last = 0;
@@ -287,6 +301,7 @@ void setup()
     server.on("/styles.css", HTTP_GET, [](){ server.send_P(200, "text/css", styles_css); });
     server.on("/config", HTTP_GET, handleConfigGet);
     server.on("/config", HTTP_POST, handleConfigPost);
+    server.on("/value", HTTP_GET, handleValue);
     server.begin();
 }
 

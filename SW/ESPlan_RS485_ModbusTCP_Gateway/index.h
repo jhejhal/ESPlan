@@ -14,7 +14,7 @@ const char index_html[] PROGMEM = R"rawliteral(
         IP <input id='ip' name='ip'><br>
         Baud <input id='baud' name='baud'><br>
         <table id='map'>
-            <tr><th>Slave</th><th>Reg</th><th>TCP</th><th></th></tr>
+            <tr><th>Slave</th><th>Reg</th><th>TCP</th><th></th><th></th></tr>
         </table>
         <button type='button' id='add'>+</button><br>
         <input type='submit' id='save' value='Save'>
