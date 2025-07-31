@@ -31,6 +31,10 @@
 #include "script.h"
 #include "styles.h"
 
+// Simple passwords stored in flash memory
+const char* CONFIG_PASSWORD = "admin";     // password required to save config
+const char* OTA_PASSWORD    = "otapass";   // password for OTA updates
+
 // RS485 serial pins on ESPlan
 #define RS485_RX 36
 #define RS485_TX 4
@@ -131,6 +135,10 @@ void handleConfigGet()
 
 void handleConfigPost()
 {
+    if(!server.hasArg("pass") || server.arg("pass") != CONFIG_PASSWORD){
+        server.send(401, "text/plain", "Wrong password");
+        return;
+    }
     if (server.hasArg("baud"))
     {
         baudrate = server.arg("baud").toInt();
@@ -338,6 +346,7 @@ void setup()
     ETH.config(local_IP, gateway, subnet, dns, dns);
 
     ArduinoOTA.setHostname("esplan");
+    ArduinoOTA.setPassword(OTA_PASSWORD);
     ArduinoOTA.begin();
 
     Serial1.begin(baudrate, SERIAL_8N1, RS485_RX, RS485_TX);
