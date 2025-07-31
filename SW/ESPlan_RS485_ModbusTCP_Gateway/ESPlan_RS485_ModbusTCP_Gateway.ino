@@ -278,7 +278,6 @@ void setup()
 
     ArduinoOTA.setHostname("esplan");
     ArduinoOTA.begin();
-
     mbServer.begin();
 
     Serial1.begin(baudrate, SERIAL_8N1, RS485_RX, RS485_TX);
