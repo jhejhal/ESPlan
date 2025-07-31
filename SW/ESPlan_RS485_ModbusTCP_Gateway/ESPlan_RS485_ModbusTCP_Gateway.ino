@@ -23,6 +23,7 @@
 #include <ModbusMaster.h>
 #include <Modbus.h>
 #include <ModbusIP_ESP8266.h>
+#include <Preferences.h>
 #include "index.h"
 #include "script.h"
 #include "styles.h"
@@ -52,17 +53,19 @@ uint16_t tcpPort = DEFAULT_TCP_PORT;
 // Modbus TCP server
 ModbusIP mb;
 
-#define MODBUS_REG_COUNT 100
+#define MODBUS_REG_COUNT 1200
 uint16_t holdingRegs[MODBUS_REG_COUNT];
 
 // Modbus RTU master
 ModbusMaster modbus;
 
+Preferences prefs;
+
 struct MapItem {
     uint8_t  slave;
     uint16_t reg;
+    uint16_t len;
     uint16_t tcp;
-    uint16_t value;
 };
 
 #define MAX_ITEMS 10
@@ -114,7 +117,7 @@ void handleConfigGet()
     json += "[";
     for (uint8_t i = 0; i < mapCount; i++)
     {
-        json += "{\"s\":" + String(maps[i].slave) + ",\"r\":" + String(maps[i].reg) + ",\"t\":" + String(maps[i].tcp) + "}";
+        json += "{\"s\":" + String(maps[i].slave) + ",\"r\":" + String(maps[i].reg) + ",\"n\":" + String(maps[i].len) + ",\"t\":" + String(maps[i].tcp) + "}";
         if (i < mapCount - 1)
             json += ",";
     }
@@ -154,8 +157,9 @@ void handleConfigPost()
     {
         String sArg = "s" + String(i);
         String rArg = "r" + String(i);
+        String nArg = "n" + String(i);
         String tArg = "t" + String(i);
-        if (server.hasArg(sArg) && server.hasArg(rArg) && server.hasArg(tArg))
+        if (server.hasArg(sArg) && server.hasArg(rArg) && server.hasArg(nArg) && server.hasArg(tArg))
         {
             uint16_t tcp = server.arg(tArg).toInt();
             bool dup = false;
@@ -171,10 +175,26 @@ void handleConfigPost()
             {
                 maps[mapCount].slave = server.arg(sArg).toInt();
                 maps[mapCount].reg   = server.arg(rArg).toInt();
+                maps[mapCount].len   = server.arg(nArg).toInt();
                 maps[mapCount].tcp   = tcp;
                 mapCount++;
             }
         }
+    }
+
+    prefs.putUInt("baud", baudrate);
+    prefs.putUShort("port", tcpPort);
+    prefs.putUChar("ip0", local_IP[0]);
+    prefs.putUChar("ip1", local_IP[1]);
+    prefs.putUChar("ip2", local_IP[2]);
+    prefs.putUChar("ip3", local_IP[3]);
+    prefs.putUChar("count", mapCount);
+    for(uint8_t i=0;i<mapCount;i++){
+        char key[6];
+        sprintf(key,"s%u",i); prefs.putUChar(key,maps[i].slave);
+        sprintf(key,"r%u",i); prefs.putUShort(key,maps[i].reg);
+        sprintf(key,"n%u",i); prefs.putUShort(key,maps[i].len);
+        sprintf(key,"t%u",i); prefs.putUShort(key,maps[i].tcp);
     }
     server.sendHeader("Location", "/");
     server.send(303);
@@ -204,13 +224,15 @@ void pollRS485()
     for (int i = 0; i < mapCount; i++)
     {
         modbus.begin(maps[i].slave, Serial1);
-        uint8_t result = modbus.readHoldingRegisters(maps[i].reg, 1);
+        uint8_t result = modbus.readHoldingRegisters(maps[i].reg, maps[i].len);
         if (result == modbus.ku8MBSuccess)
         {
-            maps[i].value = modbus.getResponseBuffer(0);
-            if (maps[i].tcp < MODBUS_REG_COUNT) {
-                holdingRegs[maps[i].tcp] = maps[i].value;
-                mb.Hreg(maps[i].tcp, maps[i].value);
+            for(uint16_t j=0;j<maps[i].len;j++){
+                uint16_t v = modbus.getResponseBuffer(j);
+                if (maps[i].tcp + j < MODBUS_REG_COUNT) {
+                    holdingRegs[maps[i].tcp + j] = v;
+                    mb.Hreg(maps[i].tcp + j, v);
+                }
             }
         }
     }
@@ -220,6 +242,26 @@ void pollRS485()
 void setup()
 {
     Serial.begin(115200);
+
+    prefs.begin("cfg", false);
+    baudrate = prefs.getUInt("baud", baudrate);
+    tcpPort = prefs.getUShort("port", DEFAULT_TCP_PORT);
+    local_IP[0] = prefs.getUChar("ip0", local_IP[0]);
+    local_IP[1] = prefs.getUChar("ip1", local_IP[1]);
+    local_IP[2] = prefs.getUChar("ip2", local_IP[2]);
+    local_IP[3] = prefs.getUChar("ip3", local_IP[3]);
+    mapCount = prefs.getUChar("count", 0);
+    for(uint8_t i=0;i<mapCount && i<MAX_ITEMS;i++){
+        char key[6];
+        sprintf(key,"s%u",i);
+        maps[i].slave = prefs.getUChar(key,1);
+        sprintf(key,"r%u",i);
+        maps[i].reg = prefs.getUShort(key,0);
+        sprintf(key,"n%u",i);
+        maps[i].len = prefs.getUShort(key,1);
+        sprintf(key,"t%u",i);
+        maps[i].tcp = prefs.getUShort(key,0);
+    }
 
     pinMode(ETH_NRST_PIN, OUTPUT);
     digitalWrite(ETH_NRST_PIN, LOW);
