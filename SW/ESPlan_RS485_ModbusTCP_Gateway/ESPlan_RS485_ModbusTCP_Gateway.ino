@@ -19,6 +19,7 @@
 #include <WiFi.h>
 #include <ETH.h>
 #include <WebServer.h>
+#include <ArduinoOTA.h>
 #include <ModbusMaster.h>
 
 // RS485 serial pins on ESPlan
@@ -91,16 +92,38 @@ void WiFiEvent(WiFiEvent_t event)
 
 void handleRoot()
 {
-    String page = "<html><body><h2>RS485 Modbus Gateway</h2>";
+    String page =
+        "<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width, initial-scale=1'>"
+        "<title>RS485 Modbus Gateway</title>"
+        "<style>body{font-family:Helvetica;background:#2e2e2e;color:#fff;text-align:center;}"
+        "table{margin:auto;border-collapse:collapse;}td,th{padding:4px;}"
+        "input,button{background:#505050;color:#fff;border:1px solid #ccc;border-radius:4px;}"
+        "button{padding:4px 8px;}</style>"
+        "<script>function addRow(){var t=document.getElementById('map');"
+        "var r=t.insertRow(-1);var i=t.rows.length-2;"
+        "r.innerHTML='<td><input name=\'s'+i+'\' type=number min=1 value=1></td>'+"
+        "'<td><input name=\'r'+i+'\' type=number min=0 value=0></td>'+"
+        "'<td><input name=\'t'+i+'\' type=number min=0 value=0></td>'+"
+        "'<td><button type=button onclick=\'delRow(this)\'>-</button></td>';"
+        "document.getElementById('count').value=i+1;}"
+        "function delRow(b){var r=b.parentNode.parentNode;r.parentNode.removeChild(r);"
+        "var t=document.getElementById('map');document.getElementById('count').value=t.rows.length-2;}"
+        "</script></head><body>";
+    page += "<h2>RS485 Modbus Gateway</h2>";
     page += "<form method='POST' action='/config'>";
-    page += "Baud:<input name='baud' value='" + String(baudrate) + "'><br>";
-    page += "IP:<input name='ip' value='" + ETH.localIP().toString() + "'><br>";
-    for (int i = 0; i < MAX_ITEMS; i++)
+    page += "IP <input name='ip' value='" + ETH.localIP().toString() + "'><br>";
+    page += "Baud <input name='baud' value='" + String(baudrate) + "'><br>";
+    page += "<table id='map'><tr><th>Slave</th><th>Reg</th><th>TCP</th><th></th></tr>";
+    for (int i = 0; i < mapCount; i++)
     {
-        page += "Slave<input name='s" + String(i) + "' value='" + String(maps[i].slave) + "'>";
-        page += " Reg<input name='r" + String(i) + "' value='" + String(maps[i].reg) + "'>";
-        page += " TCP<input name='t" + String(i) + "' value='" + String(maps[i].tcp) + "'><br>";
+        page += "<tr><td><input name='s" + String(i) + "' type='number' value='" + String(maps[i].slave) + "'></td>";
+        page += "<td><input name='r" + String(i) + "' type='number' value='" + String(maps[i].reg) + "'></td>";
+        page += "<td><input name='t" + String(i) + "' type='number' value='" + String(maps[i].tcp) + "'></td>";
+        page += "<td><button type='button' onclick='delRow(this)'>-</button></td></tr>";
     }
+    page += "</table>";
+    page += "<input type='hidden' id='count' name='count' value='" + String(mapCount) + "'>";
+    page += "<button type='button' onclick='addRow()'>+</button><br>";
     page += "<input type='submit' value='Save'></form></body></html>";
     server.send(200, "text/html", page);
 }
@@ -117,20 +140,36 @@ void handleConfig()
         local_IP.fromString(server.arg("ip"));
         ETH.config(local_IP, gateway, subnet, dns, dns);
     }
+
+    uint8_t count = 0;
+    if (server.hasArg("count"))
+    {
+        count = server.arg("count").toInt();
+    }
     mapCount = 0;
-    for (int i = 0; i < MAX_ITEMS; i++)
+    for (uint8_t i = 0; i < count && i < MAX_ITEMS; i++)
     {
         String sArg = "s" + String(i);
         String rArg = "r" + String(i);
         String tArg = "t" + String(i);
         if (server.hasArg(sArg) && server.hasArg(rArg) && server.hasArg(tArg))
         {
-            maps[i].slave = server.arg(sArg).toInt();
-            maps[i].reg   = server.arg(rArg).toInt();
-            maps[i].tcp   = server.arg(tArg).toInt();
-            if (maps[i].tcp < MODBUS_REG_COUNT)
+            uint16_t tcp = server.arg(tArg).toInt();
+            bool dup = false;
+            for (uint8_t j = 0; j < mapCount; j++)
             {
-                mapCount = i + 1;
+                if (maps[j].tcp == tcp)
+                {
+                    dup = true;
+                    break;
+                }
+            }
+            if (!dup && tcp < MODBUS_REG_COUNT)
+            {
+                maps[mapCount].slave = server.arg(sArg).toInt();
+                maps[mapCount].reg   = server.arg(rArg).toInt();
+                maps[mapCount].tcp   = tcp;
+                mapCount++;
             }
         }
     }
@@ -253,6 +292,8 @@ void setup()
     // start Ethernet with LAN8720 PHY
     ETH.begin(ETH_PHY_LAN8720, ETH_ADDR, ETH_MDC_PIN, ETH_MDIO_PIN, ETH_POWER_PIN, ETH_CLOCK_GPIO17_OUT);
 
+    ArduinoOTA.setHostname("esplan");
+    ArduinoOTA.begin();
     mbServer.begin();
 
     Serial1.begin(baudrate, SERIAL_8N1, RS485_RX, RS485_TX);
@@ -293,6 +334,7 @@ void loop()
         }
 
         server.handleClient();
+        ArduinoOTA.handle();
     }
     pollRS485();
 }
