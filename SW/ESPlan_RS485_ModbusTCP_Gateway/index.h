@@ -12,10 +12,12 @@ const char index_html[] PROGMEM = R"rawliteral(
     <h2>RS485 Modbus Gateway</h2>
     <form id='cfgForm'>
         IP <input id='ip' name='ip'><br>
+        Gateway <input id='gw' name='gw'><br>
+        Mask <input id='mask' name='mask'><br>
         Baud <input id='baud' name='baud'><br>
         Port <input id='port' name='port'><br>
         <table id='map'>
-            <tr><th>Slave</th><th>Reg</th><th>TCP</th><th></th><th></th></tr>
+            <tr><th>Slave</th><th>Reg</th><th>Len</th><th>TCP</th><th>End</th><th></th><th></th></tr>
         </table>
         <button type='button' id='add'>+</button><br>
         <input type='submit' id='save' value='Save'>
