@@ -23,6 +23,7 @@ function loadCfg(){
   fetch('/config').then(r=>r.json()).then(cfg=>{
     document.getElementById('ip').value=cfg.ip;
     document.getElementById('baud').value=cfg.baud;
+    document.getElementById('port').value=cfg.port;
     cfg.items.forEach(addRow);
   });
 }
@@ -33,6 +34,7 @@ function saveCfg(e){
   var data=new URLSearchParams();
   data.append('ip',document.getElementById('ip').value);
   data.append('baud',document.getElementById('baud').value);
+  data.append('port',document.getElementById('port').value);
   data.append('count',rows.length-1);
   for(var i=1;i<rows.length;i++){
     var r=rows[i];

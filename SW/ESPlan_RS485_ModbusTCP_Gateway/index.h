@@ -13,6 +13,7 @@ const char index_html[] PROGMEM = R"rawliteral(
     <form id='cfgForm'>
         IP <input id='ip' name='ip'><br>
         Baud <input id='baud' name='baud'><br>
+        Port <input id='port' name='port'><br>
         <table id='map'>
             <tr><th>Slave</th><th>Reg</th><th>TCP</th><th></th><th></th></tr>
         </table>

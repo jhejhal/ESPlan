@@ -21,6 +21,8 @@
 #include <WebServer.h>
 #include <ArduinoOTA.h>
 #include <ModbusMaster.h>
+#include <Modbus.h>
+#include <ModbusIP_ESP8266.h>
 #include "index.h"
 #include "script.h"
 #include "styles.h"
@@ -37,18 +39,18 @@
 #define ETH_NRST_PIN 5
 
 // network defaults
-IPAddress local_IP(192, 168, 0, 98);
-IPAddress gateway(192, 168, 0, 1);
-IPAddress subnet(255, 255, 255, 0);
+IPAddress local_IP(10, 10, 70, 114);
+IPAddress gateway(10, 10, 101, 1);
+IPAddress subnet(255, 255, 0, 0);
 IPAddress dns(8, 8, 8, 8);
 
 // web server for configuration
 WebServer server(80);
 
+#define DEFAULT_TCP_PORT 502
+uint16_t tcpPort = DEFAULT_TCP_PORT;
 // Modbus TCP server
-WiFiServer mbServer(502);
-#define MAX_CLIENTS 4
-WiFiClient mbClients[MAX_CLIENTS];
+ModbusIP mb;
 
 #define MODBUS_REG_COUNT 100
 uint16_t holdingRegs[MODBUS_REG_COUNT];
@@ -68,6 +70,13 @@ MapItem maps[MAX_ITEMS];
 uint8_t mapCount = 0;
 uint32_t baudrate = 9600;
 
+void startMbServer(){
+    mb.server(tcpPort);
+    for(uint16_t i=0;i<MODBUS_REG_COUNT;i++){
+        mb.addHreg(i);
+        mb.Hreg(i, holdingRegs[i]);
+    }
+}
 static bool eth_connected = false;
 
 void WiFiEvent(WiFiEvent_t event)
@@ -83,6 +92,7 @@ void WiFiEvent(WiFiEvent_t event)
         eth_connected = true;
         Serial.print("ETH IP: ");
         Serial.println(ETH.localIP());
+        startMbServer();
         break;
     case ARDUINO_EVENT_ETH_DISCONNECTED:
     case ARDUINO_EVENT_ETH_STOP:
@@ -100,7 +110,7 @@ void handleRoot()
 
 void handleConfigGet()
 {
-    String json = "{\"ip\":\"" + ETH.localIP().toString() + "\",\"baud\":" + String(baudrate) + ",\"items\":";
+    String json = "{\"ip\":\"" + ETH.localIP().toString() + "\",\"baud\":" + String(baudrate) + ",\"port\":" + String(tcpPort) + ",\"items\":";
     json += "[";
     for (uint8_t i = 0; i < mapCount; i++)
     {
@@ -118,6 +128,15 @@ void handleConfigPost()
     {
         baudrate = server.arg("baud").toInt();
         Serial1.begin(baudrate, SERIAL_8N1, RS485_RX, RS485_TX);
+    }
+    if (server.hasArg("port"))
+    {
+        uint16_t newPort = server.arg("port").toInt();
+        if (newPort != 0 && newPort != tcpPort)
+        {
+            tcpPort = newPort;
+            startMbServer();
+        }
     }
     if (server.hasArg("ip"))
     {
@@ -168,7 +187,7 @@ void handleValue()
         uint16_t t = server.arg("t").toInt();
         if (t < MODBUS_REG_COUNT)
         {
-            server.send(200, "text/plain", String(holdingRegs[t]));
+            server.send(200, "text/plain", String(mb.Hreg(t)));
             return;
         }
     }
@@ -191,90 +210,12 @@ void pollRS485()
             maps[i].value = modbus.getResponseBuffer(0);
             if (maps[i].tcp < MODBUS_REG_COUNT) {
                 holdingRegs[maps[i].tcp] = maps[i].value;
+                mb.Hreg(maps[i].tcp, maps[i].value);
             }
         }
     }
 }
 
-void handleMBTCP(WiFiClient &client)
-{
-    if (client.available() < 7)
-        return;
-
-    uint8_t header[7];
-    client.readBytes(header, 7);
-    uint16_t transId = (header[0] << 8) | header[1];
-    uint16_t length = (header[4] << 8) | header[5];
-    uint8_t unitId = header[6];
-
-    while (client.available() < length)
-        ;
-
-    uint8_t pdu[256];
-    if (length > sizeof(pdu))
-    {
-        client.flush();
-        return;
-    }
-    client.readBytes(pdu, length);
-
-    uint8_t functionCode = pdu[0];
-    uint8_t response[260];
-    uint16_t respLen = 0;
-
-    if (functionCode == 3 && length >= 5)
-    {
-        uint16_t startAddr = (pdu[1] << 8) | pdu[2];
-        uint16_t quantity = (pdu[3] << 8) | pdu[4];
-        if (startAddr + quantity <= MODBUS_REG_COUNT && quantity <= 125)
-        {
-            response[0] = transId >> 8;
-            response[1] = transId & 0xFF;
-            response[2] = 0;
-            response[3] = 0;
-            response[4] = 0;
-            response[5] = quantity * 2 + 3;
-            response[6] = unitId;
-            response[7] = functionCode;
-            response[8] = quantity * 2;
-            respLen = 9;
-            for (int i = 0; i < quantity; i++)
-            {
-                uint16_t val = holdingRegs[startAddr + i];
-                response[respLen++] = val >> 8;
-                response[respLen++] = val & 0xFF;
-            }
-        }
-        else
-        {
-            response[0] = transId >> 8;
-            response[1] = transId & 0xFF;
-            response[2] = 0;
-            response[3] = 0;
-            response[4] = 0;
-            response[5] = 3;
-            response[6] = unitId;
-            response[7] = functionCode | 0x80;
-            response[8] = 0x02;
-            respLen = 9;
-        }
-    }
-    else
-    {
-        response[0] = transId >> 8;
-        response[1] = transId & 0xFF;
-        response[2] = 0;
-        response[3] = 0;
-        response[4] = 0;
-        response[5] = 3;
-        response[6] = unitId;
-        response[7] = functionCode | 0x80;
-        response[8] = 0x01;
-        respLen = 9;
-    }
-
-    client.write(response, respLen);
-}
 
 void setup()
 {
@@ -286,13 +227,12 @@ void setup()
     digitalWrite(ETH_NRST_PIN, HIGH);
 
     WiFi.onEvent(WiFiEvent);
-    ETH.config(local_IP, gateway, subnet, dns, dns);
     // start Ethernet with LAN8720 PHY
     ETH.begin(ETH_PHY_LAN8720, ETH_ADDR, ETH_MDC_PIN, ETH_MDIO_PIN, ETH_POWER_PIN, ETH_CLOCK_GPIO17_OUT);
+    ETH.config(local_IP, gateway, subnet, dns, dns);
 
     ArduinoOTA.setHostname("esplan");
     ArduinoOTA.begin();
-    mbServer.begin();
 
     Serial1.begin(baudrate, SERIAL_8N1, RS485_RX, RS485_TX);
 
@@ -309,35 +249,9 @@ void loop()
 {
     if (eth_connected)
     {
-        if (mbServer.hasClient())
-        {
-            WiFiClient newClient = mbServer.available();
-            for (int i = 0; i < MAX_CLIENTS; i++)
-            {
-                if (!mbClients[i] || !mbClients[i].connected())
-                {
-                    if (mbClients[i]) mbClients[i].stop();
-                    mbClients[i] = newClient;
-                    break;
-                }
-            }
-            if (newClient && newClient.connected())
-            {
-                newClient.stop();
-            }
-        }
-
-        for (int i = 0; i < MAX_CLIENTS; i++)
-        {
-            if (mbClients[i] && mbClients[i].connected() && mbClients[i].available())
-            {
-                handleMBTCP(mbClients[i]);
-            }
-        }
-
+        mb.task();
         server.handleClient();
         ArduinoOTA.handle();
     }
     pollRS485();
 }
-
