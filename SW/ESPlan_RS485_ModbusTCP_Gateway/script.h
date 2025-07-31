@@ -74,7 +74,16 @@ function saveCfg(e){
       }
     }
   }
-  fetch('/config',{method:'POST',body:data}).then(()=>location.reload());
+  var pass=prompt('Enter password');
+  if(pass===null)return;
+  data.append('pass',pass);
+  fetch('/config',{method:'POST',body:data}).then(r=>{
+    if(r.status==401){
+      alert('Wrong password');
+    }else{
+      location.reload();
+    }
+  });
 }
 function updateClients(){
   fetch('/clients').then(r=>r.json()).then(data=>{
