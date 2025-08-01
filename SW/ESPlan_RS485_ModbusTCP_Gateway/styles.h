@@ -15,8 +15,11 @@ button:not(.icon):hover,input:hover[type=submit]{color:black;background-color:li
 .icon{background:none;border:none;padding:0;}
 .tableWrap{display:flex;flex-direction:row;align-items:flex-end;}
 .clientsWrap{display:flex;align-items:center;gap:4px;}
+.cycleWrap{display:flex;align-items:center;gap:4px;}
+.actionWrap{display:flex;gap:4px;}
 #add{margin-left:8px;margin-bottom:1px;height:30px;width:30px;}
 #add span{position:relative;left:-6px;font-size:20px;}
+#restart,#save{width:110px;}
 #restart{margin-left:10px;}
 )rawliteral";
 #endif
