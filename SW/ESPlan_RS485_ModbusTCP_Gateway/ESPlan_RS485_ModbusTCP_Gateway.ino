@@ -336,16 +336,15 @@ void pollRS485()
     static uint32_t last = 0;
     static uint8_t idx = 0;
     static uint32_t cycleStart = 0;
+    if (millis() - last < 100)
+        return;
+    last = millis();
+
     if (mapCount == 0)
         return;
 
-    uint32_t now = millis();
-    if (now - last < 100)
-        return;
-
-    if (idx == 0)
-        cycleStart = now;
-
+    if(idx == 0)
+        cycleStart = millis();
     MapItem *m = &maps[idx];
     modbus.begin(m->slave, Serial1);
     uint8_t result = modbus.readHoldingRegisters(m->reg, m->len);
@@ -365,13 +364,10 @@ void pollRS485()
     } else {
         DEBUG_PRINTF("Modbus read error %u on slave %u\n", result, m->slave);
     }
-
-    last = millis();
-
     idx++;
     if(idx >= mapCount){
         idx = 0;
-        pollCycleTime = last - cycleStart;
+        pollCycleTime = millis() - cycleStart;
         pollCycleCount++;
     }
     idx++;
