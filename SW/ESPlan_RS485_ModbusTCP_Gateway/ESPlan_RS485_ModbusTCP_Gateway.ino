@@ -91,7 +91,7 @@ struct MapItem {
     uint16_t tcp;
 };
 
-#define MAX_ITEMS 10
+#define MAX_ITEMS 125
 MapItem maps[MAX_ITEMS];
 uint8_t mapCount = 0;
 uint32_t baudrate = 9600;
