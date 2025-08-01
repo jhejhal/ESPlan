@@ -38,6 +38,7 @@ function loadCfg(){
     document.getElementById('mask').value=cfg.mask;
     document.getElementById('baud').value=cfg.baud;
     document.getElementById('port').value=cfg.port;
+    document.getElementById('split').value=cfg.split;
     cfg.items.forEach(addRow);
   });
 }
@@ -51,6 +52,7 @@ function saveCfg(e){
   data.append('mask',document.getElementById('mask').value);
   data.append('baud',document.getElementById('baud').value);
   data.append('port',document.getElementById('port').value);
+  data.append('split',document.getElementById('split').value);
   data.append('count',rows.length-1);
   for(var i=1;i<rows.length;i++){
     var r=rows[i];
