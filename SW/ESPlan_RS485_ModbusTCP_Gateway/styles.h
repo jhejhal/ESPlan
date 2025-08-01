@@ -6,6 +6,7 @@ body{font-family:Helvetica;background:#2e2e2e;color:#fff;text-align:center;margi
 .settings{display:flex;flex-direction:column;text-align:left;border-right:1px solid #555;padding-right:20px;margin-right:20px;min-width:230px;}
 .field{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
 table{margin:auto;border-collapse:collapse;min-width:700px;}
+table button{margin-right:5px;margin-left:5px;}
 td,th{padding:6px;border:1px solid #555;}
 input,button{background:#505050;color:#fff;border:1px solid #888;border-radius:4px;padding:4px 6px;transition:linear 0.1s;}
 input{width:110px;}
@@ -14,8 +15,8 @@ button:not(.icon):hover,input:hover[type=submit]{color:black;background-color:li
 .icon:hover{color:gray;transition:linear 0.1s;}
 .icon{background:none;border:none;padding:0;}
 .tableWrap{display:flex;flex-direction:row;align-items:flex-end;}
-.clientsWrap{display:flex;align-items:center;gap:4px;}
-.cycleWrap{display:flex;align-items:center;gap:4px;}
+.clientsWrap{display:flex;align-items:center;gap:9px;margin-right:4px;}
+.cycleWrap{display:flex;align-items:center;gap:10px;margin-right:6px;}
 .actionWrap{display:flex;gap:4px;}
 #add{margin-left:8px;margin-bottom:1px;height:30px;width:30px;}
 #add span{position:relative;left:-6px;font-size:20px;}
