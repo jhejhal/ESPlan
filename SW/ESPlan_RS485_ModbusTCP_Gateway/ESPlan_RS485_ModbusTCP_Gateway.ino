@@ -95,6 +95,10 @@ struct MapItem {
 MapItem maps[MAX_ITEMS];
 uint8_t mapCount = 0;
 uint32_t baudrate = 9600;
+// maximum registers per single Modbus request that the library can handle
+#define MAX_REGS_PER_REQ 50
+// limit for splitting large register blocks (0 = no split)
+uint16_t splitLen = MAX_REGS_PER_REQ;
 
 // duration of one Modbus task cycle in milliseconds
 volatile uint32_t cycleTimeMs = 0;
@@ -150,7 +154,7 @@ void handleRoot()
 
 void handleConfigGet()
 {
-    String json = "{\"ip\":\"" + ETH.localIP().toString() + "\",\"gw\":\"" + gateway.toString() + "\",\"mask\":\"" + subnet.toString() + "\",\"baud\":" + String(baudrate) + ",\"port\":" + String(tcpPort) + ",\"items\":";
+    String json = "{\"ip\":\"" + ETH.localIP().toString() + "\",\"gw\":\"" + gateway.toString() + "\",\"mask\":\"" + subnet.toString() + "\",\"baud\":" + String(baudrate) + ",\"port\":" + String(tcpPort) + ",\"split\":" + String(splitLen) + ",\"items\":";
     json += "[";
     for (uint8_t i = 0; i < mapCount; i++)
     {
@@ -182,6 +186,10 @@ void handleConfigPost()
             tcpPort = newPort;
             startMbServer();
         }
+    }
+    if (server.hasArg("split"))
+    {
+        splitLen = server.arg("split").toInt();
     }
     if (server.hasArg("ip"))
     {
@@ -234,6 +242,7 @@ void handleConfigPost()
 
     prefs.putUInt("baud", baudrate);
     prefs.putUShort("port", tcpPort);
+    prefs.putUShort("split", splitLen);
     prefs.putUChar("ip0", local_IP[0]);
     prefs.putUChar("ip1", local_IP[1]);
     prefs.putUChar("ip2", local_IP[2]);
@@ -345,23 +354,39 @@ bool pollRS485()
 
     MapItem *m = &maps[idx];
     modbus.begin(m->slave, Serial1);
-    uint8_t result = modbus.readHoldingRegisters(m->reg, m->len);
-    if (result == modbus.ku8MBSuccess)
+    uint16_t remaining = m->len;
+    uint16_t reg = m->reg;
+    uint16_t off = 0;
+    while (remaining > 0)
     {
-        for(uint16_t j=0;j<m->len;j++){
-            uint16_t v = modbus.getResponseBuffer(j);
-            if (m->tcp + j < MODBUS_REG_COUNT) {
-                if(xSemaphoreTake(mbMutex, portMAX_DELAY) == pdTRUE){
-                    holdingRegs[m->tcp + j] = v;
-                    mb.Hreg(m->tcp + j, v);
-                    xSemaphoreGive(mbMutex);
+        uint16_t chunk = remaining;
+        if (splitLen && chunk > splitLen) chunk = splitLen;
+        if (chunk > MAX_REGS_PER_REQ) chunk = MAX_REGS_PER_REQ;
+        modbus.clearResponseBuffer();
+        uint8_t result = modbus.readHoldingRegisters(reg, chunk);
+        if (result == modbus.ku8MBSuccess)
+        {
+            for(uint16_t j=0;j<chunk;j++){
+                uint16_t v = modbus.getResponseBuffer(j);
+                if (m->tcp + off + j < MODBUS_REG_COUNT) {
+                    if(xSemaphoreTake(mbMutex, portMAX_DELAY) == pdTRUE){
+                        holdingRegs[m->tcp + off + j] = v;
+                        mb.Hreg(m->tcp + off + j, v);
+                        xSemaphoreGive(mbMutex);
+                    }
                 }
             }
+            reg += chunk;
+            off += chunk;
+            remaining -= chunk;
+            vTaskDelay(pdMS_TO_TICKS(20));
+        } else {
+            DEBUG_PRINTF("Modbus read error %u on slave %u\n", result, m->slave);
+            break;
         }
-        DEBUG_PRINTF("Slave %u reg %u len %u updated\n", m->slave, m->reg, m->len);
-    } else {
-        DEBUG_PRINTF("Modbus read error %u on slave %u\n", result, m->slave);
     }
+    if(remaining == 0)
+        DEBUG_PRINTF("Slave %u reg %u len %u updated\n", m->slave, m->reg, m->len);
     idx++;
     if(idx >= mapCount) idx = 0;
     return true;
@@ -410,6 +435,7 @@ void setup()
     prefs.begin("cfg", false);
     baudrate = prefs.getUInt("baud", baudrate);
     tcpPort = prefs.getUShort("port", DEFAULT_TCP_PORT);
+    splitLen = prefs.getUShort("split", splitLen);
     local_IP[0] = prefs.getUChar("ip0", local_IP[0]);
     local_IP[1] = prefs.getUChar("ip1", local_IP[1]);
     local_IP[2] = prefs.getUChar("ip2", local_IP[2]);
