@@ -330,16 +330,18 @@ void handleRestart(){
     ESP.restart();
 }
 
-void pollRS485()
+// poll one Modbus register block
+// returns true if polling was performed
+bool pollRS485()
 {
     static uint32_t last = 0;
     static uint8_t idx = 0;
     if (millis() - last < 100)
-        return;
+        return false; // too soon, skip
     last = millis();
 
     if (mapCount == 0)
-        return;
+        return false;
 
     MapItem *m = &maps[idx];
     modbus.begin(m->slave, Serial1);
@@ -362,6 +364,7 @@ void pollRS485()
     }
     idx++;
     if(idx >= mapCount) idx = 0;
+    return true;
 }
 
 
@@ -371,9 +374,10 @@ void modbusTask(void *param)
     for(;;)
     {
         uint32_t start = millis();
-        pollRS485();
+        bool done = pollRS485();
         vTaskDelay(10 / portTICK_PERIOD_MS);
-        cycleTimeMs = millis() - start;
+        if(done)
+            cycleTimeMs = millis() - start;
     }
 }
 
