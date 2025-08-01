@@ -345,7 +345,6 @@ void pollRS485()
 
     if(idx == 0)
         cycleStart = millis();
-
     MapItem *m = &maps[idx];
     modbus.begin(m->slave, Serial1);
     uint8_t result = modbus.readHoldingRegisters(m->reg, m->len);
@@ -371,6 +370,8 @@ void pollRS485()
         pollCycleTime = millis() - cycleStart;
         pollCycleCount++;
     }
+    idx++;
+    if(idx >= mapCount) idx = 0;
 }
 
 
