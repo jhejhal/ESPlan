@@ -10,8 +10,8 @@ function addRow(item){
              "<td><input class='n' type='number' min='1' value='"+(item?item.n:1)+"'></td>"+
              "<td><input class='t' type='number' min='0' value='"+(item?item.t:0)+"'></td>"+
              "<td class='end'></td>"+
-             "<td><button type='button' onclick='delRow(this)' class='icon'><span class='material-icons'>delete</span></button></td>"+
-             "<td><button type='button' onclick='showVal(this)'>Show</button></td>";
+             "<td class='actionWrap'><button type='button' onclick='showVal(this)' class='icon' title='Show'><span class='material-icons'>visibility</span></button> "+
+             "<button type='button' onclick='delRow(this)' class='icon' title='Delete'><span class='material-icons'>delete</span></button></td>";
   updateEnd(r);
   r.querySelector('.n').addEventListener('input',()=>updateEnd(r));
   r.querySelector('.t').addEventListener('input',()=>updateEnd(r));
