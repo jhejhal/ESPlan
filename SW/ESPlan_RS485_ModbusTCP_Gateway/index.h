@@ -19,6 +19,7 @@ const char index_html[] PROGMEM = R"rawliteral(
                 <div class='field'><label>Mask</label><input id='mask' name='mask'></div>
                 <div class='field'><label>Baud</label><input id='baud' name='baud'></div>
                 <div class='field'><label>Port</label><input id='port' name='port'></div>
+                <div class='field'><label>Split</label><input id='split' name='split'></div>
                 <div class='field'><label>Clients</label><div class='clientsWrap'><span id='clients'>0</span><button type='button' id='showClients' class='icon' title='Show clients'><span class='material-icons'>visibility</span></button></div></div>
                 <div class='field'><label>Cycle time</label><div class='cycleWrap'><span id='cycle'>0</span> ms</div></div>
             </div>
