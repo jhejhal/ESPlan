@@ -47,6 +47,8 @@
 #define DEBUG_PRINTF(...)
 #endif
 
+#define MODBUS_MAX_REGS 100
+
 // Simple passwords stored in flash memory
 const char* CONFIG_PASSWORD = "admin";     // password required to save config
 const char* OTA_PASSWORD    = "otapass";   // password for OTA updates
@@ -95,10 +97,9 @@ struct MapItem {
 MapItem maps[MAX_ITEMS];
 uint8_t mapCount = 0;
 uint32_t baudrate = 9600;
-// maximum registers per single Modbus request that the library can handle
-#define MAX_REGS_PER_REQ 50
+
 // limit for splitting large register blocks (0 = no split)
-uint16_t splitLen = MAX_REGS_PER_REQ;
+uint16_t splitLen = MODBUS_MAX_REGS;
 
 // duration of one Modbus task cycle in milliseconds
 volatile uint32_t cycleTimeMs = 0;
@@ -154,7 +155,7 @@ void handleRoot()
 
 void handleConfigGet()
 {
-    String json = "{\"ip\":\"" + ETH.localIP().toString() + "\",\"gw\":\"" + gateway.toString() + "\",\"mask\":\"" + subnet.toString() + "\",\"baud\":" + String(baudrate) + ",\"port\":" + String(tcpPort) + ",\"split\":" + String(splitLen) + ",\"items\":";
+    String json = "{\"ip\":\"" + ETH.localIP().toString() + "\",\"gw\":\"" + gateway.toString() + "\",\"mask\":\"" + subnet.toString() + "\",\"baud\":" + String(baudrate) + ",\"port\":" + String(tcpPort) + ",\"items\":";
     json += "[";
     for (uint8_t i = 0; i < mapCount; i++)
     {
@@ -186,10 +187,6 @@ void handleConfigPost()
             tcpPort = newPort;
             startMbServer();
         }
-    }
-    if (server.hasArg("split"))
-    {
-        splitLen = server.arg("split").toInt();
     }
     if (server.hasArg("ip"))
     {
@@ -242,7 +239,6 @@ void handleConfigPost()
 
     prefs.putUInt("baud", baudrate);
     prefs.putUShort("port", tcpPort);
-    prefs.putUShort("split", splitLen);
     prefs.putUChar("ip0", local_IP[0]);
     prefs.putUChar("ip1", local_IP[1]);
     prefs.putUChar("ip2", local_IP[2]);
@@ -361,7 +357,7 @@ bool pollRS485()
     {
         uint16_t chunk = remaining;
         if (splitLen && chunk > splitLen) chunk = splitLen;
-        if (chunk > MAX_REGS_PER_REQ) chunk = MAX_REGS_PER_REQ;
+        if (chunk > MODBUS_MAX_REGS) chunk = MODBUS_MAX_REGS;
         modbus.clearResponseBuffer();
         uint8_t result = modbus.readHoldingRegisters(reg, chunk);
         if (result == modbus.ku8MBSuccess)
@@ -379,7 +375,7 @@ bool pollRS485()
             reg += chunk;
             off += chunk;
             remaining -= chunk;
-            vTaskDelay(pdMS_TO_TICKS(20));
+            vTaskDelay(pdMS_TO_TICKS(32));
         } else {
             DEBUG_PRINTF("Modbus read error %u on slave %u\n", result, m->slave);
             break;
@@ -435,7 +431,6 @@ void setup()
     prefs.begin("cfg", false);
     baudrate = prefs.getUInt("baud", baudrate);
     tcpPort = prefs.getUShort("port", DEFAULT_TCP_PORT);
-    splitLen = prefs.getUShort("split", splitLen);
     local_IP[0] = prefs.getUChar("ip0", local_IP[0]);
     local_IP[1] = prefs.getUChar("ip1", local_IP[1]);
     local_IP[2] = prefs.getUChar("ip2", local_IP[2]);
