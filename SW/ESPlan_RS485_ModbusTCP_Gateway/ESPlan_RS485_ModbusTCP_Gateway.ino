@@ -96,6 +96,9 @@ MapItem maps[MAX_ITEMS];
 uint8_t mapCount = 0;
 uint32_t baudrate = 9600;
 
+// duration of one Modbus task cycle in milliseconds
+volatile uint32_t cycleTimeMs = 0;
+
 SemaphoreHandle_t mbMutex;
 
 // disconnect TCP clients after two minutes of inactivity
@@ -317,7 +320,7 @@ void handleClients(){
         }
         pcb = pcb->next;
     }
-    String json = "{\"count\":" + String(count) + ",\"ips\":[" + list + "]}";
+    String json = "{\"count\":" + String(count) + ",\"cycle\":" + String(cycleTimeMs) + ",\"ips\":[" + list + "]}";
     server.send(200, "application/json", json);
 }
 
@@ -367,8 +370,10 @@ void modbusTask(void *param)
     DEBUG_PRINTLN("Modbus task started");
     for(;;)
     {
+        uint32_t start = millis();
         pollRS485();
         vTaskDelay(10 / portTICK_PERIOD_MS);
+        cycleTimeMs = millis() - start;
     }
 }
 
