@@ -96,6 +96,9 @@ MapItem maps[MAX_ITEMS];
 uint8_t mapCount = 0;
 uint32_t baudrate = 9600;
 
+// duration of one Modbus task cycle in milliseconds
+volatile uint32_t cycleTimeMs = 0;
+
 SemaphoreHandle_t mbMutex;
 
 // disconnect TCP clients after two minutes of inactivity
@@ -317,7 +320,7 @@ void handleClients(){
         }
         pcb = pcb->next;
     }
-    String json = "{\"count\":" + String(count) + ",\"ips\":[" + list + "]}";
+    String json = "{\"count\":" + String(count) + ",\"cycle\":" + String(cycleTimeMs) + ",\"ips\":[" + list + "]}";
     server.send(200, "application/json", json);
 }
 
@@ -327,16 +330,18 @@ void handleRestart(){
     ESP.restart();
 }
 
-void pollRS485()
+// poll one Modbus register block
+// returns true if polling was performed
+bool pollRS485()
 {
     static uint32_t last = 0;
     static uint8_t idx = 0;
     if (millis() - last < 100)
-        return;
+        return false; // too soon, skip
     last = millis();
 
     if (mapCount == 0)
-        return;
+        return false;
 
     MapItem *m = &maps[idx];
     modbus.begin(m->slave, Serial1);
@@ -359,6 +364,7 @@ void pollRS485()
     }
     idx++;
     if(idx >= mapCount) idx = 0;
+    return true;
 }
 
 
@@ -367,8 +373,11 @@ void modbusTask(void *param)
     DEBUG_PRINTLN("Modbus task started");
     for(;;)
     {
-        pollRS485();
+        uint32_t start = millis();
+        bool done = pollRS485();
         vTaskDelay(10 / portTICK_PERIOD_MS);
+        if(done)
+            cycleTimeMs = millis() - start;
     }
 }
 
