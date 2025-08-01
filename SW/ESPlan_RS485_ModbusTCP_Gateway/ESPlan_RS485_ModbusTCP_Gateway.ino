@@ -96,6 +96,10 @@ MapItem maps[MAX_ITEMS];
 uint8_t mapCount = 0;
 uint32_t baudrate = 9600;
 
+// statistics about polling cycles
+volatile uint32_t pollCycleCount = 0;
+volatile uint32_t pollCycleTime = 0;
+
 SemaphoreHandle_t mbMutex;
 
 // disconnect TCP clients after two minutes of inactivity
@@ -317,7 +321,7 @@ void handleClients(){
         }
         pcb = pcb->next;
     }
-    String json = "{\"count\":" + String(count) + ",\"ips\":[" + list + "]}";
+    String json = "{\"count\":" + String(count) + ",\"cycle\":" + String(pollCycleTime) + ",\"ips\":[" + list + "]}";
     server.send(200, "application/json", json);
 }
 
@@ -331,6 +335,7 @@ void pollRS485()
 {
     static uint32_t last = 0;
     static uint8_t idx = 0;
+    static uint32_t cycleStart = 0;
     if (millis() - last < 100)
         return;
     last = millis();
@@ -338,6 +343,8 @@ void pollRS485()
     if (mapCount == 0)
         return;
 
+    if(idx == 0)
+        cycleStart = millis();
     MapItem *m = &maps[idx];
     modbus.begin(m->slave, Serial1);
     uint8_t result = modbus.readHoldingRegisters(m->reg, m->len);
@@ -356,6 +363,12 @@ void pollRS485()
         DEBUG_PRINTF("Slave %u reg %u len %u updated\n", m->slave, m->reg, m->len);
     } else {
         DEBUG_PRINTF("Modbus read error %u on slave %u\n", result, m->slave);
+    }
+    idx++;
+    if(idx >= mapCount){
+        idx = 0;
+        pollCycleTime = millis() - cycleStart;
+        pollCycleCount++;
     }
     idx++;
     if(idx >= mapCount) idx = 0;
