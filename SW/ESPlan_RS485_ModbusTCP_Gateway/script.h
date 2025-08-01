@@ -88,6 +88,8 @@ function saveCfg(e){
 function updateClients(){
   fetch('/clients').then(r=>r.json()).then(data=>{
     document.getElementById('clients').textContent=data.count;
+    if(document.getElementById('cycle'))
+      document.getElementById('cycle').textContent=data.cycle;
     clientIPs=data.ips;
   });
 }
