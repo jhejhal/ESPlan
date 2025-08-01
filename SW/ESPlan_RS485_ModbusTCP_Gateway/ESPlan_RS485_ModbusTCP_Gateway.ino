@@ -336,7 +336,6 @@ void pollRS485()
     static uint32_t last = 0;
     static uint8_t idx = 0;
     static uint32_t cycleStart = 0;
-
     if (mapCount == 0)
         return;
 
@@ -375,6 +374,8 @@ void pollRS485()
         pollCycleTime = last - cycleStart;
         pollCycleCount++;
     }
+    idx++;
+    if(idx >= mapCount) idx = 0;
 }
 
 
