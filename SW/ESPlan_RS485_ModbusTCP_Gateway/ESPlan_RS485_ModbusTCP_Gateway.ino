@@ -95,8 +95,10 @@ struct MapItem {
 MapItem maps[MAX_ITEMS];
 uint8_t mapCount = 0;
 uint32_t baudrate = 9600;
-// maximum number of registers read in a single Modbus request
-uint16_t splitLen = 10; // device limit, 0 = disabled
+// maximum registers per single Modbus request that the library can handle
+#define MAX_REGS_PER_REQ 50
+// limit for splitting large register blocks (0 = no split)
+uint16_t splitLen = MAX_REGS_PER_REQ;
 
 // duration of one Modbus task cycle in milliseconds
 volatile uint32_t cycleTimeMs = 0;
@@ -355,8 +357,12 @@ bool pollRS485()
     uint16_t remaining = m->len;
     uint16_t reg = m->reg;
     uint16_t off = 0;
-    while(remaining > 0){
-        uint16_t chunk = splitLen && remaining > splitLen ? splitLen : remaining;
+    while (remaining > 0)
+    {
+        uint16_t chunk = remaining;
+        if (splitLen && chunk > splitLen) chunk = splitLen;
+        if (chunk > MAX_REGS_PER_REQ) chunk = MAX_REGS_PER_REQ;
+        modbus.clearResponseBuffer();
         uint8_t result = modbus.readHoldingRegisters(reg, chunk);
         if (result == modbus.ku8MBSuccess)
         {
@@ -373,6 +379,7 @@ bool pollRS485()
             reg += chunk;
             off += chunk;
             remaining -= chunk;
+            vTaskDelay(pdMS_TO_TICKS(20));
         } else {
             DEBUG_PRINTF("Modbus read error %u on slave %u\n", result, m->slave);
             break;
