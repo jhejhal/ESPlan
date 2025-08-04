@@ -51,7 +51,7 @@
 
 // Simple passwords stored in flash memory
 const char* CONFIG_PASSWORD = "admin";     // password required to save config
-const char* OTA_PASSWORD    = "otapass";   // password for OTA updates
+const char* OTA_PASSWORD    = "arduino";   // password for OTA updates
 
 // RS485 serial pins on ESPlan
 #define RS485_RX 36
@@ -65,9 +65,9 @@ const char* OTA_PASSWORD    = "otapass";   // password for OTA updates
 #define ETH_NRST_PIN 5
 
 // network defaults
-IPAddress local_IP(10, 10, 70, 114);
-IPAddress gateway(10, 10, 101, 1);
-IPAddress subnet(255, 255, 0, 0);
+IPAddress local_IP(192, 168, 1, 4);
+IPAddress gateway(192, 168, 1, 1);
+IPAddress subnet(255, 255, 255, 0);
 IPAddress dns(8, 8, 8, 8);
 
 // web server for configuration
